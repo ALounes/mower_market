@@ -1,5 +1,12 @@
 import pandas as pd
+import numpy as np
+# import matplotlib.pyplot as plt
+from sklearn import linear_model
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import cross_val_score
 import re
+import math
 
 
 def rmsle(predictions, real_values):
@@ -15,34 +22,150 @@ def rmsle(predictions, real_values):
     for i in range(0, len(predictions)):
         sum += math.pow(math.log(float(predictions[i]) + 1) - math.log(float(real_values[i]) + 1), 2)
 
-    sum = sum * (1/len(predictions))
+    return float(math.sqrt(sum / len(predictions)))
 
-    return float(math.sqrt(sum))
+
+def get_the_best_argument(x_train, x_test, y_train, y_test):
+    """
+
+    :param x_train: input training set
+    :param x_test: input testing set
+    :param y_train: output training set
+    :param y_test: output testing set
+    :return: the minimum error and the best configuration fo the n_components parameter
+    """
+
+    min = 1
+    indice = 0
+
+    for i in range(1, 14):
+        # Configuration de la PLS
+        reg2 = cross_decomposition.PLSRegression(n_components=i, scale=True)
+        # regression training
+        reg2.fit_transform(x_train, y_train)
+        # prediction
+        y_pred = reg2.predict(x_test)
+
+        if min > rmsle(y_pred, y_test):
+            min = rmsle(y_pred, y_test)
+            indice = i
+
+        # print(rmsle(y_pred, y_test))
+
+    return min, indice
+
+
+def cleaning_dataframe(df):
+    """
+    Cleaning the df dataframe
+    :param df:
+    :return:
+    """
+    # mettre les missing value en NAN et le reste en float
+    df.prod_cost = pd.to_numeric(df.prod_cost, errors='coerce')
+
+    # Virer les doublon et la colonne avec un NAN
+    df = df.drop_duplicates(subset=['id']).dropna()
+
+    # Supression des outliers <= 0
+    df = df.loc[df['prod_cost'] > 0]
+
+    # Cleaning warrenty rows
+    df.warranty = df.warranty.apply(lambda x: re.findall('\d', x)[0] + '_ans')
+
+    # creation de variables
+    df = pd.get_dummies(df, columns=['product_type', 'quality', 'warranty'])
+
+    return df
+
+
+def linear_training(df, var):
+    """
+
+    :param df:
+    :param var:
+    :return:
+    """
+
+    condition = df[var] == 1
+    filtred_df = df[condition]
+
+    y = filtred_df.attractiveness.values.reshape(-1, 1)
+    X = filtred_df.drop(['id', 'market_share', 'attractiveness'], axis=1).values
+
+    reg = linear_model.LinearRegression()
+    reg.fit(X, y)
+
+    return reg
+
+
+# TODO : To validate
+def linear_prediction(df, reg, var):
+    """
+
+    :param df:
+    :param var:
+    :return:
+    """
+    condition = df[var] == 1
+    filtred_df = df[condition]
+    prediction = reg.predict(filtred_df)
+
+    res_df = filtred_df['id']
+    res_df['attractiveness'] = prediction
+
+    return res_df
+
+
+def get_regression_model(df):
+    """
+
+    :param df:
+    :return:
+    """
+
+    reg1 = linear_training(df, 'product_type_auto-portee')
+    reg2 = linear_training(df, 'product_type_electrique')
+    reg3 = linear_training(df, 'product_type_essence')
+
+    return reg1, reg2, reg3
+
+# TODO : To complete and validate
+def get_prediction(df, reg_auto_portee, reg_electrique, reg_essence):
+    """
+
+    :param df:
+    :param reg_auto_portee:
+    :param reg_electrique:
+    :param reg_essence:
+    :return:
+    """
+
+    auto_porte_prediction = linear_prediction(df, reg_auto_portee, 'product_type_auto-portee')
+    electrique_prediction = linear_prediction(df, reg_electrique, 'product_type_electrique')
+    essence_prediction = linear_prediction(df, reg_essence, 'product_type_essence')
+
+    # TODO : concatenate the DataFrame
+
+    return auto_porte_prediction
 
 
 def main():
     """
-
-    :return:
+    The main function
     """
-
     training_df = pd.read_csv('../data/mower_market_snapshot.csv', sep=';')
     submission_df = pd.read_csv('../data/submission_set.csv', sep=';')
 
-    # mettre les missing value en NAN et le reste en float
-    training_df.prod_cost = pd.to_numeric(training_df.prod_cost, errors='coerce')
+    # Cleaning dataframe
+    training_df = cleaning_dataframe(training_df)
+    submission_df = cleaning_dataframe(submission_df)
 
-    # Virer les doublon et la colonne avec un NAN
-    training_df = training_df.drop_duplicates(subset=['id']).dropna()
+    reg_auto_portee, reg_electrique ,reg_essence = get_regression_model(training_df)
 
-    # Supression des outliers <= 0
-    training_df = training_df.loc[training_df['prod_cost'] > 0]
+    prediction_df = get_prediction(submission_df, reg_auto_portee, reg_electrique, reg_essence)
 
-    # Cleaning warrenty rows
-    training_df.warranty = training_df.warranty.apply(lambda x: re.findall('\d', x)[0] + '_ans')
-
-    # creation de variables
-    training_df = pd.get_dummies(training_df, columns=['product_type', 'quality', 'warranty'])
+    prediction_df.to_csv('../data/achab_lounes_prediction.csv')
 
 
 if __name__ == '__main__':

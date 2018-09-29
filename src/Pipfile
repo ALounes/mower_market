@@ -1,8 +1,7 @@
-[[source]]
-
-url = "https://pypi.python.org/simple"
-verify_ssl = true
-name = "pypi"
+#[[source]]
+#url = "https://pypi.python.org/simple"
+#verify_ssl = true
+#name = "pypi"
 
 
 [dev-packages]
@@ -14,6 +13,7 @@ pytest = "*"
 
 pandas = "*"
 matplotlib = "*"
+sklearn = "*"
 
 
 [requires]
