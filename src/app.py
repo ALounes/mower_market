@@ -1,7 +1,10 @@
+# TODO : adding modules
+
 import pandas as pd
 import numpy as np
 # import matplotlib.pyplot as plt
 from sklearn import linear_model
+from sklearn import cross_decomposition
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import cross_val_score
@@ -16,15 +19,14 @@ def rmsle(predictions, real_values):
     :param real_values: array of real values
     :return: rmsle value
     """
-
     sum = 0
-
     for i in range(0, len(predictions)):
         sum += math.pow(math.log(float(predictions[i]) + 1) - math.log(float(real_values[i]) + 1), 2)
 
     return float(math.sqrt(sum / len(predictions)))
 
 
+# TODO : deprecated, Use Cross validation
 def get_the_best_argument(x_train, x_test, y_train, y_test):
     """
 
@@ -55,6 +57,7 @@ def get_the_best_argument(x_train, x_test, y_train, y_test):
     return min, indice
 
 
+# TODO : should be in a Sklearn pipeline, adding normalization
 def cleaning_dataframe(df):
     """
     Cleaning the df dataframe
@@ -79,6 +82,7 @@ def cleaning_dataframe(df):
     return df
 
 
+# TODO : refactor, adding parameters to have a generic function
 def linear_training(df, var):
     """
 
@@ -99,7 +103,7 @@ def linear_training(df, var):
     return reg
 
 
-# TODO : To validate
+# TODO : need to be refactored
 def linear_prediction(df, reg, var):
     """
 
@@ -109,28 +113,33 @@ def linear_prediction(df, reg, var):
     """
     condition = df[var] == 1
     filtred_df = df[condition]
-    prediction = reg.predict(filtred_df)
 
-    res_df = filtred_df['id']
+    ids = filtred_df.id.values.reshape(-1, 1)
+    X = filtred_df.drop(['id'], axis=1).values
+
+    prediction = reg.predict(X)
+
+    res_df = pd.DataFrame(ids, columns=['id'])
     res_df['attractiveness'] = prediction
 
     return res_df
 
 
+# TODO: refactor to loop from a dictionary and return an array or dict
 def get_regression_model(df):
     """
 
     :param df:
     :return:
     """
-
     reg1 = linear_training(df, 'product_type_auto-portee')
     reg2 = linear_training(df, 'product_type_electrique')
     reg3 = linear_training(df, 'product_type_essence')
 
     return reg1, reg2, reg3
 
-# TODO : To complete and validate
+
+# TODO: refactor to loop from a dictionary
 def get_prediction(df, reg_auto_portee, reg_electrique, reg_essence):
     """
 
@@ -145,15 +154,15 @@ def get_prediction(df, reg_auto_portee, reg_electrique, reg_essence):
     electrique_prediction = linear_prediction(df, reg_electrique, 'product_type_electrique')
     essence_prediction = linear_prediction(df, reg_essence, 'product_type_essence')
 
-    # TODO : concatenate the DataFrame
-
-    return auto_porte_prediction
+    return pd.concat([auto_porte_prediction, electrique_prediction, essence_prediction])
 
 
+# TODO : Should implement a pipeline
 def main():
     """
     The main function
     """
+    # TODO : the file name should be passed into a parameter
     training_df = pd.read_csv('../data/mower_market_snapshot.csv', sep=';')
     submission_df = pd.read_csv('../data/submission_set.csv', sep=';')
 
@@ -161,11 +170,38 @@ def main():
     training_df = cleaning_dataframe(training_df)
     submission_df = cleaning_dataframe(submission_df)
 
+    # TODO : should implement a classification logic then the regression ...
     reg_auto_portee, reg_electrique ,reg_essence = get_regression_model(training_df)
+    prediction_df = get_prediction(submission_df, reg_auto_portee, reg_electrique, reg_essence)
+
+    # Write result into csv file
+    # TODO : the file name should be a parameter
+    prediction_df.to_csv('../data/achab_lounes_attractiveness.csv', index=False)
+
+
+def evaluate_prediction():
+    """
+
+    :return:
+    """
+    df = pd.read_csv('../data/mower_market_snapshot.csv', sep=';')
+
+    training_df, submission = train_test_split(df, test_size=0.2)
+
+    test_df = submission.loc[:, ['id', 'attractiveness']]
+    submission_df = submission.drop(['market_share', 'attractiveness'], axis=1)
+
+    # Cleaning dataframe
+    training_df = cleaning_dataframe(training_df)
+    submission_df = cleaning_dataframe(submission_df)
+
+    reg_auto_portee, reg_electrique, reg_essence = get_regression_model(training_df)
 
     prediction_df = get_prediction(submission_df, reg_auto_portee, reg_electrique, reg_essence)
 
-    prediction_df.to_csv('../data/achab_lounes_prediction.csv')
+    res = pd.DataFrame(pd.merge(test_df, prediction_df, on='id'))
+
+    print(rmsle(res.attractiveness_x.values.reshape(-1, 1), res.attractiveness_y.values.reshape(-1, 1)))
 
 
 if __name__ == '__main__':
